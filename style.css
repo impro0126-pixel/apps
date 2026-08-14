@@ -1,0 +1,145 @@
+/* 공통 디자인 시스템(루트 DESIGN.md)의 간격·모서리·글자 크기를 따른다.
+   ⚠️ 주조색만 앱 아이콘 색(#3B5BDB)으로 바꿨다 — 이 페이지는 앱의 얼굴이라
+   토스풍 파랑(#3182F6)을 쓰면 아이콘과 어긋난다. DESIGN.md 가 허용하는 예외다. */
+
+:root {
+  --primary: #3B5BDB;
+  --primary-container: #e9edfb;
+  --background: #f2f4f6;
+  --surface: #ffffff;
+  --on-surface: #191f28;
+  --on-surface-variant: #6b7684;
+  --border: #e5e8eb;
+  --border-subtle: #f2f4f6;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 40px 20px 80px;
+  background: var(--background);
+  color: var(--on-surface);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
+               'Apple SD Gothic Neo', sans-serif;
+  font-size: 15px;
+  line-height: 24px;
+  -webkit-text-size-adjust: 100%;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 32px 24px;
+}
+
+h1 {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 36px;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 26px;
+  letter-spacing: -0.01em;
+  margin: 32px 0 12px;
+}
+
+h3 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  margin: 24px 0 8px;
+}
+
+p { margin: 0 0 12px; }
+ul { margin: 0 0 12px; padding-left: 20px; }
+li { margin-bottom: 6px; }
+
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.meta, .back {
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  line-height: 18px;
+}
+.meta { margin-bottom: 24px; }
+.back { margin: 0 0 24px; }
+
+.callout {
+  background: var(--primary-container);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 8px;
+}
+
+.lead {
+  font-size: 16px;
+  color: var(--on-surface-variant);
+  margin-bottom: 24px;
+}
+
+/* 표는 좁은 화면에서 넘칠 수 있어 가로로만 스크롤시킨다. */
+.table-wrap { overflow-x: auto; margin-bottom: 12px; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 22px;
+  margin-bottom: 12px;
+}
+th, td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+th {
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.faq {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.faq strong { display: block; margin-bottom: 6px; }
+.faq p { margin: 0; color: var(--on-surface-variant); }
+
+.app-card {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  color: inherit;
+}
+.app-card:hover { border-color: var(--primary); text-decoration: none; }
+.app-card strong { display: block; font-size: 16px; margin-bottom: 4px; }
+.app-card span { color: var(--on-surface-variant); font-size: 14px; }
+
+footer {
+  max-width: 720px;
+  margin: 24px auto 0;
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  body { padding: 20px 12px 60px; }
+  main { padding: 24px 16px; border-radius: 14px; }
+  h1 { font-size: 24px; line-height: 32px; }
+}
