@@ -146,6 +146,19 @@ th {
 .app-card strong { display: block; font-size: 16px; margin-bottom: 4px; }
 .app-card span { color: var(--on-surface-variant); font-size: 14px; }
 
+/* 앱스토어로 가는 단추. 애플 공식 배지 그림은 안 쓴다 — 받아 둔 그림이 없고,
+   글자 단추면 색이 페이지 주조색을 따라간다. */
+.store-button {
+  display: inline-block;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 12px;
+  padding: 12px 20px;
+  margin-bottom: 8px;
+}
+.store-button:hover { text-decoration: none; opacity: 0.9; }
+
 footer {
   max-width: 720px;
   margin: 24px auto 0;
