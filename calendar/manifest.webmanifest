@@ -1,0 +1,11 @@
+{
+  "name": "모아보는 달력",
+  "short_name": "모아달력",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f4f6",
+  "theme_color": "#3B5BDB",
+  "lang": "ko",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

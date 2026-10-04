@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>모아보는 달력</title>
+<meta name="description" content="애플·구글·네이버 캘린더를 한 화면에 모아 보고 음력도 함께 보는 달력">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#3B5BDB">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="모아달력">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+/* 색·간격은 저장소 루트 style.css 의 토큰을 따른다(주조색 #3B5BDB). 달력은 앱 화면이라 따로 둔다. */
+:root {
+  --primary: #3B5BDB;
+  --primary-container: #e9edfb;
+  --background: #f2f4f6;
+  --surface: #ffffff;
+  --on-surface: #191f28;
+  --on-surface-variant: #6b7684;
+  --border: #e5e8eb;
+  --sunday: #e5484d;
+  --saturday: #3B5BDB;
+  --today: #3B5BDB;
+  --lunar: #8b95a1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --primary: #7c93f0;
+    --primary-container: #232a45;
+    --background: #101114;
+    --surface: #1a1c20;
+    --on-surface: #eceef1;
+    --on-surface-variant: #9aa3ad;
+    --border: #2b2e34;
+    --sunday: #ff6b6f;
+    --saturday: #7c93f0;
+    --today: #7c93f0;
+    --lunar: #7d8590;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--on-surface);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo', sans-serif;
+  font-size: 15px;
+  -webkit-text-size-adjust: 100%;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+input, select { font: inherit; }
+
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: calc(12px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+}
+
+/* 머리줄 */
+.top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.title { flex: 1; min-width: 0; }
+.title h1 { margin: 0; font-size: 22px; line-height: 28px; letter-spacing: -0.02em; white-space: nowrap; }
+.title .sub { color: var(--on-surface-variant); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icon-btn {
+  border: 1px solid var(--border); background: var(--surface);
+  border-radius: 10px; min-width: 38px; height: 38px; padding: 0 10px;
+}
+.icon-btn:active { transform: scale(0.97); }
+
+/* 출처 범례 — 누르면 숨김/보임 */
+.legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); background: var(--surface);
+  border-radius: 999px; padding: 4px 10px; font-size: 13px;
+}
+.chip .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.chip.off { opacity: 0.45; }
+.chip.off .dot { background: transparent !important; outline: 1.5px solid var(--on-surface-variant); }
+.chip .err { color: var(--sunday); font-weight: 700; }
+
+/* 달력 격자 */
+.grid {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  overflow: hidden; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.dow { text-align: center; font-size: 12px; padding: 8px 0; color: var(--on-surface-variant); border-bottom: 1px solid var(--border); }
+.dow.sun { color: var(--sunday); } .dow.sat { color: var(--saturday); }
+.cell {
+  min-height: 92px; padding: 4px 3px 6px; border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border); text-align: left; background: none; border-top: 0; border-left: 0;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden;
+}
+.cell:nth-child(7n+7) { border-right: 0; }
+.cell.other { opacity: 0.4; }
+.cell.selected { background: var(--primary-container); }
+.daynum { display: flex; align-items: baseline; justify-content: space-between; gap: 2px; padding: 0 2px; }
+.daynum b { font-size: 13px; font-weight: 600; min-width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 11px; }
+.cell.sun .daynum b, .cell.holiday .daynum b { color: var(--sunday); }
+.cell.sat .daynum b { color: var(--saturday); }
+.cell.today .daynum b { background: var(--today); color: #fff; }
+.lunar { font-size: 10px; color: var(--lunar); white-space: nowrap; }
+.lunar.first { color: var(--on-surface-variant); font-weight: 600; }
+.ev {
+  font-size: 11px; line-height: 15px; border-radius: 4px; padding: 0 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ev.allday { color: #fff; }
+.ev.timed { padding-left: 2px; }
+.ev.timed::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--c); margin-right: 3px; vertical-align: 1px; }
+.more { font-size: 10px; color: var(--on-surface-variant); padding-left: 4px; }
+@media (max-width: 520px) {
+  .app { padding-left: 8px; padding-right: 8px; }
+  .cell { min-height: 74px; }
+  .ev { font-size: 10px; line-height: 14px; padding: 0 2px; }
+  .ev.timed::before { display: none; }
+  .ev.timed { border-left: 2px solid var(--c); border-radius: 0; }
+  .lunar { font-size: 9px; }
+  .top { gap: 6px; }
+  .title h1 { font-size: 19px; line-height: 24px; }
+  .icon-btn { min-width: 34px; height: 34px; padding: 0 8px; }
+}
+
+/* 고른 날의 일정 목록 */
+.day-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-top: 12px; }
+.day-panel h2 { margin: 0 0 2px; font-size: 17px; }
+.day-panel .lunar-full { color: var(--on-surface-variant); font-size: 13px; margin-bottom: 12px; }
+.item { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+.item:first-of-type { border-top: 0; }
+.item .bar { width: 4px; border-radius: 2px; flex: none; }
+.item .time { width: 92px; flex: none; white-space: nowrap; color: var(--on-surface-variant); font-size: 13px; line-height: 20px; }
+.item .what { min-width: 0; flex: 1; }
+.item .what strong { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.item .what span { display: block; color: var(--on-surface-variant); font-size: 13px; overflow-wrap: anywhere; }
+.empty { color: var(--on-surface-variant); padding: 8px 0; }
+.status { color: var(--on-surface-variant); font-size: 12px; margin-top: 10px; text-align: center; }
+
+/* 설정 창 */
+dialog {
+  border: 0; border-radius: 16px; padding: 0; width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 48px); background: var(--surface); color: var(--on-surface);
+}
+dialog::backdrop { background: rgba(0,0,0,0.4); }
+.sheet { padding: 20px; }
+.sheet h2 { margin: 0 0 4px; font-size: 18px; }
+.sheet h3 { margin: 20px 0 8px; font-size: 15px; }
+.sheet p.hint { color: var(--on-surface-variant); font-size: 13px; line-height: 19px; margin: 4px 0 10px; }
+.sheet label { display: block; font-size: 13px; color: var(--on-surface-variant); margin: 10px 0 4px; }
+.sheet input[type=text], .sheet input[type=url], .sheet input[type=password], .sheet select {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--background); color: var(--on-surface);
+}
+.row { display: flex; gap: 8px; align-items: center; }
+.row > * { flex: 1; }
+.row > .narrow { flex: none; }
+input[type=color] { width: 44px; height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 2px; background: var(--background); }
+.src {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px;
+}
+.src .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.src .info { flex: 1; min-width: 0; }
+.src .info strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.src .info span { color: var(--on-surface-variant); font-size: 12px; }
+.btn { border: 0; border-radius: 10px; padding: 10px 14px; background: var(--primary); color: #fff; font-weight: 600; }
+.btn.ghost { background: var(--background); color: var(--on-surface); border: 1px solid var(--border); font-weight: 500; }
+.btn.danger { background: none; color: var(--sunday); border: 1px solid var(--border); padding: 6px 10px; font-weight: 500; font-size: 13px; }
+.actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+.tabs { display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap; }
+.tabs button { border: 1px solid var(--border); background: var(--background); border-radius: 999px; padding: 6px 12px; font-size: 13px; }
+.tabs button[aria-pressed=true] { background: var(--primary); border-color: var(--primary); color: #fff; }
+details.help { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-top: 8px; font-size: 13px; line-height: 20px; }
+details.help summary { cursor: pointer; font-weight: 600; }
+details.help ol { padding-left: 18px; margin: 8px 0 0; color: var(--on-surface-variant); }
+code { background: var(--background); border-radius: 4px; padding: 1px 4px; font-size: 0.92em; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <button class="icon-btn" id="prev" aria-label="이전 달">‹</button>
+    <div class="title">
+      <h1 id="month-title"></h1>
+      <div class="sub" id="month-lunar"></div>
+    </div>
+    <button class="icon-btn" id="next" aria-label="다음 달">›</button>
+    <button class="icon-btn" id="today-btn">오늘</button>
+    <button class="icon-btn" id="refresh" aria-label="새로고침">↻</button>
+    <button class="icon-btn" id="settings-btn" aria-label="설정">⚙︎</button>
+  </div>
+
+  <div class="legend" id="legend"></div>
+  <div class="grid" id="grid"></div>
+  <section class="day-panel" id="day-panel"></section>
+  <div class="status" id="status"></div>
+</div>
+
+<dialog id="settings">
+  <form class="sheet" method="dialog" id="settings-form">
+    <h2>설정</h2>
+    <p class="hint">여기 넣은 주소·비밀번호는 이 기기 브라우저에만 저장되고, 일정을 받아올 때 내가 만든 중계기(Worker)로만 보내집니다.</p>
+
+    <h3>중계기(Worker)</h3>
+    <p class="hint">구글·애플·네이버 서버는 웹페이지가 직접 읽어 가지 못하게 막혀 있어서, 내 Cloudflare Worker 가 대신 받아 줍니다. 무료입니다.</p>
+    <label for="proxy-url">Worker 주소</label>
+    <input type="url" id="proxy-url" placeholder="https://moa-calendar.내아이디.workers.dev" autocomplete="off">
+    <label for="proxy-key">접근 키(ACCESS_KEY)</label>
+    <input type="password" id="proxy-key" placeholder="Worker 에 넣은 것과 같은 값" autocomplete="off">
+    <details class="help">
+      <summary>Worker 만드는 법 (5분)</summary>
+      <ol>
+        <li><a href="https://dash.cloudflare.com/" target="_blank" rel="noopener">Cloudflare</a> 가입 → Workers &amp; Pages → 만들기 → Worker 만들기 → 배포</li>
+        <li>코드 편집 → <a href="worker.js" target="_blank">worker.js</a> 내용을 통째로 붙여넣고 배포</li>
+        <li>설정 → 변수 및 비밀 → <code>ACCESS_KEY</code> 를 '비밀'로 추가 (아무 긴 문자열)</li>
+        <li>Worker 주소와 그 키를 위 칸에 넣기</li>
+      </ol>
+    </details>
+
+    <h3>캘린더</h3>
+    <div id="src-list"></div>
+
+    <h3>캘린더 추가</h3>
+    <div class="tabs" role="group" aria-label="종류">
+      <button type="button" data-kind="google" aria-pressed="true">구글</button>
+      <button type="button" data-kind="apple" aria-pressed="false">애플 iCloud</button>
+      <button type="button" data-kind="naver" aria-pressed="false">네이버</button>
+      <button type="button" data-kind="ics" aria-pressed="false">기타 iCal 주소</button>
+      <button type="button" data-kind="file" aria-pressed="false">.ics 파일</button>
+    </div>
+    <div id="add-help"></div>
+    <div class="row">
+      <div><label for="add-name">이름</label><input type="text" id="add-name" placeholder="예: 회사"></div>
+      <div class="narrow"><label for="add-color">색</label><input type="color" id="add-color" value="#3B5BDB"></div>
+    </div>
+    <div id="add-fields"></div>
+    <div class="actions">
+      <button type="button" class="btn ghost" id="add-holidays">대한민국 공휴일 추가</button>
+      <button type="button" class="btn" id="add-btn">추가</button>
+    </div>
+
+    <div class="actions">
+      <button class="btn ghost" value="close">닫기</button>
+    </div>
+  </form>
+</dialog>
+
+<script type="module">
+import ICAL from './vendor/ical.min.js';
+
+// ── 저장 ────────────────────────────────────────────────────
+// 브라우저 저장소는 사생활 보호 모드 등에서 막힐 수 있어 전부 try/catch 로 감싼다.
+const store = {
+  get(k, fallback) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } },
+};
+const settings = store.get('moa.settings', { proxyUrl: '', proxyKey: '' });
+let sources = store.get('moa.sources', []);
+const saveSources = () => store.set('moa.sources', sources);
+const saveSettings = () => store.set('moa.settings', settings);
+
+const HOLIDAY_ICS = 'https://calendar.google.com/calendar/ical/ko.south_korea%23holiday%40group.v.calendar.google.com/public/basic.ics';
+const PALETTE = ['#3B5BDB', '#e8590c', '#2f9e44', '#ae3ec9', '#0c8599', '#e64980', '#f08c00'];
+
+// ── 음력 ────────────────────────────────────────────────────
+// 브라우저에 들어 있는 한국 음력(단기, dangi) 달력을 쓴다. 표를 따로 들고 다니지 않아도
+// 윤달·대소월이 정확하다. 단기를 모르는 옛 브라우저면 중국 음력으로 대신한다(거의 같다).
+const lunarFmt = (() => {
+  for (const cal of ['dangi', 'chinese']) {
+    try {
+      const f = new Intl.DateTimeFormat(`ko-KR-u-ca-${cal}`, { year: 'numeric', month: 'numeric', day: 'numeric', timeZone: 'Asia/Seoul' });
+      if (f.resolvedOptions().calendar === cal) return f;
+    } catch {}
+  }
+  return null;
+})();
+const lunarCache = new Map();
+function lunarOf(date) {
+  if (!lunarFmt) return null;
+  const key = ymd(date);
+  if (lunarCache.has(key)) return lunarCache.get(key);
+  // 정오로 맞춰 시간대 경계에서 하루 밀리지 않게 한다
+  const noon = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 3));
+  const parts = Object.fromEntries(lunarFmt.formatToParts(noon).map(p => [p.type, p.value]));
+  const monthRaw = parts.month || '';
+  const r = {
+    year: +(parts.relatedYear || parts.year || 0),
+    month: +(monthRaw.match(/\d+/) || [0])[0],
+    leap: /윤|bis|L/i.test(monthRaw),
+    day: +(parts.day || 0),
+  };
+  lunarCache.set(key, r);
+  return r;
+}
+const lunarShort = l => `${l.leap ? '윤' : ''}${l.month}.${l.day}`;
+const lunarLong = l => `음력 ${l.year}년 ${l.leap ? '윤' : ''}${l.month}월 ${l.day}일`;
+
+// ── 날짜 도우미 ─────────────────────────────────────────────
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const hm = d => `${d.getHours() < 12 ? '오전' : '오후'} ${(d.getHours() % 12) || 12}:${pad(d.getMinutes())}`;
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+
+// ── 일정 받아오기 ───────────────────────────────────────────
+// 원문(ICS 글)을 출처별로 기억해 두고, 달을 옮길 때마다 그 달 범위만 펼친다.
+const raw = new Map();       // sourceId → [{ics, color?}]
+const errors = new Map();    // sourceId → 오류 문구
+const parsed = new Map();    // sourceId → [ICAL.Component(vcalendar)]
+
+function proxyFetch(path, init = {}) {
+  if (!settings.proxyUrl) throw new Error('설정에서 Worker 주소를 넣어 주세요');
+  const base = settings.proxyUrl.replace(/\/+$/, '');
+  return fetch(base + path, { ...init, headers: { ...(init.headers || {}), 'X-Access-Key': settings.proxyKey || '' } });
+}
+
+async function readError(res) {
+  try { const j = await res.json(); return j.error || `${res.status}`; } catch { return `${res.status}`; }
+}
+
+async function loadSource(src) {
+  if (src.kind === 'file') return [{ ics: src.ics }];
+  if (src.kind === 'caldav') {
+    const now = new Date();
+    const res = await proxyFetch('/caldav', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        server: src.server, username: src.username, password: src.password,
+        start: new Date(now.getFullYear() - 1, 0, 1).toISOString(),
+        end: new Date(now.getFullYear() + 2, 0, 1).toISOString(),
+      }),
+    });
+    if (!res.ok) throw new Error(await readError(res));
+    const { calendars } = await res.json();
+    // CalDAV 계정 안의 여러 캘린더 이름을 기억해 두면 일정 목록에 함께 보여줄 수 있다
+    return calendars.flatMap(c => c.ics.map(ics => ({ ics, calName: c.name })));
+  }
+  const res = await proxyFetch('/ics?url=' + encodeURIComponent(src.url));
+  if (!res.ok) throw new Error(await readError(res));
+  return [{ ics: await res.text() }];
+}
+
+function parseRaw(id) {
+  const list = raw.get(id) || [];
+  const comps = [];
+  for (const item of list) {
+    try {
+      const comp = new ICAL.Component(ICAL.parse(item.ics));
+      // VTIMEZONE 을 등록해야 '서울 시간'·'뉴욕 시간' 일정이 제 시각에 놓인다
+      for (const tz of comp.getAllSubcomponents('vtimezone')) {
+        const t = new ICAL.Timezone(tz);
+        if (!ICAL.TimezoneService.has(t.tzid)) ICAL.TimezoneService.register(t.tzid, t);
+      }
+      comp._calName = item.calName;
+      comps.push(comp);
+    } catch (e) { console.warn('ICS 해석 실패', e); }
+  }
+  parsed.set(id, comps);
+}
+
+async function refreshAll() {
+  setStatus('일정을 받아오는 중…');
+  await Promise.all(sources.map(async src => {
+    try {
+      const data = await loadSource(src);
+      raw.set(src.id, data);
+      errors.delete(src.id);
+      // 다음에 열 때 바로 보이도록 원문을 남겨 둔다(용량이 넘치면 그냥 건너뛴다)
+      if (src.kind !== 'file') store.set('moa.cache.' + src.id, data);
+    } catch (e) {
+      errors.set(src.id, String(e.message || e));
+    }
+    parseRaw(src.id);
+  }));
+  const now = new Date();
+  store.set('moa.fetchedAt', now.toISOString());
+  render();
+  const failed = sources.filter(s => errors.has(s.id)).length;
+  setStatus(sources.length === 0 ? '' :
+    `${hm(now)} 기준` + (failed ? ` · ${failed}개 캘린더를 못 받았습니다(빨간 ! 를 누르면 이유가 보입니다)` : ''));
+}
+
+function loadCached() {
+  for (const src of sources) {
+    const data = src.kind === 'file' ? [{ ics: src.ics }] : store.get('moa.cache.' + src.id, null);
+    if (data) { raw.set(src.id, data); parseRaw(src.id); }
+  }
+}
+
+// ── 반복 일정 펼치기 ────────────────────────────────────────
+function expand(rangeStart, rangeEnd) {
+  const out = [];
+  const rs = ICAL.Time.fromJSDate(rangeStart, false);
+  const re = ICAL.Time.fromJSDate(rangeEnd, false);
+  for (const src of sources) {
+    if (src.hidden) continue;
+    for (const comp of parsed.get(src.id) || []) {
+      const vevents = comp.getAllSubcomponents('vevent');
+      // 반복 일정 중 한 번만 바뀐 회차(RECURRENCE-ID)는 원본에 붙여야 두 번 안 나온다
+      const masters = new Map();
+      const exceptions = [];
+      for (const ve of vevents) {
+        const ev = new ICAL.Event(ve);
+        if (ev.isRecurrenceException()) exceptions.push(ev); else masters.set(ev.uid, ev);
+      }
+      for (const ex of exceptions) {
+        const m = masters.get(ex.uid);
+        if (m) m.relateException(ex); else masters.set(ex.uid + '#' + ex.recurrenceId, ex);
+      }
+      for (const ev of masters.values()) {
+        if ((ev.component.getFirstPropertyValue('status') || '').toUpperCase() === 'CANCELLED') continue;
+        const push = (start, end, item) => {
+          if (!start) return;
+          const allDay = start.isDate;
+          let s = start.toJSDate();
+          let e = end ? end.toJSDate() : (allDay ? addDays(s, 1) : s);
+          if (e < s) e = s;
+          if (e <= rangeStart && s < rangeStart) return;
+          if (s >= rangeEnd) return;
+          out.push({
+            title: item.summary || '(제목 없음)',
+            location: item.location || '',
+            start: s, end: e, allDay,
+            color: src.color, source: src.name, calName: comp._calName,
+          });
+        };
+        if (ev.isRecurring()) {
+          const it = ev.iterator();
+          let next, guard = 0;
+          while ((next = it.next()) && guard++ < 5000) {
+            if (next.compare(re) >= 0) break;
+            const d = ev.getOccurrenceDetails(next);
+            if (d.endDate.compare(rs) <= 0) continue;
+            push(d.startDate, d.endDate, d.item);
+          }
+        } else {
+          push(ev.startDate, ev.endDate, ev);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// ── 그리기 ──────────────────────────────────────────────────
+let cursor = new Date(); cursor.setDate(1);
+let selected = startOfDay(new Date());
+const $ = id => document.getElementById(id);
+const setStatus = t => { $('status').textContent = t; };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function eventsByDay(events, days) {
+  const map = new Map(days.map(d => [ymd(d), []]));
+  for (const ev of events) {
+    // 하루 종일 일정의 끝은 '다음날 0시'라서 그날은 빼고, 시간 일정은 끝나는 순간이 걸친 날까지
+    let d = startOfDay(ev.start);
+    const last = ev.allDay ? addDays(startOfDay(ev.end), -1) : startOfDay(new Date(ev.end.getTime() - 1));
+    for (let i = 0; d <= last && i < 400; i++, d = addDays(d, 1)) {
+      const list = map.get(ymd(d));
+      if (list) list.push(ev);
+    }
+    if (last < startOfDay(ev.start)) map.get(ymd(startOfDay(ev.start)))?.push(ev);
+  }
+  for (const list of map.values()) {
+    list.sort((a, b) => (b.allDay - a.allDay) || (a.start - b.start) || a.title.localeCompare(b.title));
+  }
+  return map;
+}
+
+let lastByDay = new Map();
+
+function render() {
+  const y = cursor.getFullYear(), m = cursor.getMonth();
+  $('month-title').textContent = `${y}년 ${m + 1}월`;
+  const l1 = lunarOf(new Date(y, m, 1)), l2 = lunarOf(new Date(y, m + 1, 0));
+  $('month-lunar').textContent = l1 ? `음력 ${lunarShort(l1)} ~ ${lunarShort(l2)}` : '';
+
+  const first = new Date(y, m, 1);
+  const gridStart = addDays(first, -first.getDay());
+  const weeks = Math.ceil((first.getDay() + new Date(y, m + 1, 0).getDate()) / 7);
+  const days = Array.from({ length: weeks * 7 }, (_, i) => addDays(gridStart, i));
+  const events = expand(days[0], addDays(days[days.length - 1], 1));
+  lastByDay = eventsByDay(events, days);
+  const holidaySrc = new Set(sources.filter(s => s.holiday && !s.hidden).map(s => s.name));
+  const todayKey = ymd(new Date());
+  const narrow = matchMedia('(max-width: 520px)').matches;
+  const maxShow = narrow ? 3 : 4;
+
+  let html = DOW.map((d, i) => `<div class="dow ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${d}</div>`).join('');
+  for (const d of days) {
+    const key = ymd(d);
+    const list = lastByDay.get(key) || [];
+    const lun = lunarOf(d);
+    const isHoliday = list.some(e => holidaySrc.has(e.source));
+    const cls = ['cell',
+      d.getMonth() !== m && 'other', d.getDay() === 0 && 'sun', d.getDay() === 6 && 'sat',
+      isHoliday && 'holiday', key === todayKey && 'today', key === ymd(selected) && 'selected'].filter(Boolean).join(' ');
+    const lunTxt = lun ? `<span class="lunar ${lun.day === 1 ? 'first' : ''}">${lun.day === 1 || d.getDate() === 1 ? lunarShort(lun) : lun.day}</span>` : '';
+    const shown = list.slice(0, maxShow).map(e => e.allDay
+      ? `<div class="ev allday" style="background:${e.color}">${esc(e.title)}</div>`
+      : `<div class="ev timed" style="--c:${e.color}">${narrow ? '' : `${pad(e.start.getHours())}:${pad(e.start.getMinutes())} `}${esc(e.title)}</div>`).join('');
+    const more = list.length > maxShow ? `<div class="more">+${list.length - maxShow}</div>` : '';
+    html += `<button class="${cls}" data-day="${key}" aria-label="${d.getMonth() + 1}월 ${d.getDate()}일 일정 ${list.length}개">
+      <div class="daynum"><b>${d.getDate()}</b>${lunTxt}</div>${shown}${more}</button>`;
+  }
+  $('grid').innerHTML = html;
+  renderLegend();
+  renderDay();
+}
+
+function renderLegend() {
+  if (sources.length === 0) {
+    $('legend').innerHTML = `<button class="chip" id="first-setup">＋ 캘린더 연결하기</button>`;
+    $('first-setup').onclick = openSettings;
+    return;
+  }
+  $('legend').innerHTML = sources.map(s => `
+    <button class="chip ${s.hidden ? 'off' : ''}" data-toggle="${s.id}" title="${esc(errors.get(s.id) || '누르면 숨기기/보이기')}">
+      <span class="dot" style="background:${s.color}"></span>${esc(s.name)}${errors.has(s.id) ? ' <span class="err">!</span>' : ''}
+    </button>`).join('');
+}
+
+function renderDay() {
+  const d = selected;
+  const list = lastByDay.get(ymd(d)) || expandDay(d);
+  const lun = lunarOf(d);
+  const items = list.map(e => {
+    let time;
+    if (e.allDay) time = '하루 종일';
+    else {
+      const sameDay = ymd(e.start) === ymd(d);
+      time = sameDay ? hm(e.start) : '이어짐';
+      if (ymd(e.end) === ymd(d) || sameDay) time += `<br>~ ${ymd(e.end) === ymd(d) || ymd(e.end) === ymd(e.start) ? hm(e.end) : '다음날'}`;
+    }
+    const meta = [e.calName && e.calName !== e.source ? `${e.source} · ${e.calName}` : e.source, e.location].filter(Boolean).map(esc).join(' · ');
+    return `<div class="item"><div class="bar" style="background:${e.color}"></div>
+      <div class="time">${time}</div>
+      <div class="what"><strong>${esc(e.title)}</strong><span>${meta}</span></div></div>`;
+  }).join('');
+  const errLines = [...errors.entries()].map(([id, msg]) => {
+    const s = sources.find(x => x.id === id);
+    return s ? `<div class="empty">⚠︎ ${esc(s.name)}: ${esc(msg)}</div>` : '';
+  }).join('');
+  $('day-panel').innerHTML = `
+    <h2>${d.getMonth() + 1}월 ${d.getDate()}일 ${DOW[d.getDay()]}요일</h2>
+    <div class="lunar-full">${lun ? lunarLong(lun) : ''}</div>
+    ${items || `<div class="empty">${sources.length ? '일정이 없습니다' : '오른쪽 위 ⚙︎ 에서 캘린더를 연결해 주세요'}</div>`}
+    ${errLines}`;
+}
+
+// 고른 날이 보이는 달 밖이면(키보드로 넘기다 등) 그날만 따로 펼친다
+function expandDay(d) {
+  const evs = expand(d, addDays(d, 1));
+  return eventsByDay(evs, [d]).get(ymd(d)) || [];
+}
+
+// ── 설정 창 ─────────────────────────────────────────────────
+const KIND_HELP = {
+  google: `<details class="help" open><summary>구글 캘린더 주소 찾기</summary><ol>
+    <li>컴퓨터에서 <a href="https://calendar.google.com/calendar/r/settings" target="_blank" rel="noopener">구글 캘린더 설정</a>을 엽니다 (개인·회사 계정 각각)</li>
+    <li>왼쪽 '내 캘린더의 설정'에서 캘린더를 고르고 → '캘린더 통합'</li>
+    <li><b>'iCal 형식의 비공개 주소'</b>를 복사해 아래에 붙여넣기</li>
+    <li>회사 계정에서 이 항목이 안 보이면 회사 관리자가 막아 둔 것입니다</li></ol></details>`,
+  apple: `<details class="help" open><summary>애플 iCloud 연결</summary><ol>
+    <li><a href="https://account.apple.com/account/manage" target="_blank" rel="noopener">Apple 계정</a> → 로그인 및 보안 → <b>앱 암호</b> 만들기</li>
+    <li>아래에 Apple 계정 이메일과 그 앱 암호를 넣으면 iCloud 의 모든 캘린더를 가져옵니다</li>
+    <li>(다른 방법) 캘린더 앱에서 캘린더 공유 → '공개 캘린더'를 켜고 그 webcal 주소를 '기타 iCal 주소'로 넣어도 됩니다</li></ol></details>`,
+  naver: `<details class="help" open><summary>네이버 캘린더 연결</summary><ol>
+    <li>네이버 → 내정보 → 보안설정 → 2단계 인증 → <b>애플리케이션 비밀번호</b> 만들기 (종류: 기타/CalDAV)</li>
+    <li>아래에 네이버 아이디와 그 애플리케이션 비밀번호를 넣습니다</li>
+    <li>2단계 인증을 안 쓰면 네이버 비밀번호로도 될 수 있지만, 앱 비밀번호를 권합니다</li></ol></details>`,
+  ics: `<p class="hint">webcal:// 또는 https:// 로 시작하는 iCal(.ics) 구독 주소를 넣으세요.</p>`,
+  file: `<p class="hint">캘린더에서 내보낸 .ics 파일을 고르세요. 새 일정은 자동으로 따라오지 않습니다(다시 불러와야 함).</p>`,
+};
+const CALDAV_SERVER = { apple: 'https://caldav.icloud.com/', naver: 'https://caldav.calendar.naver.com/' };
+let addKind = 'google';
+
+function renderAddForm() {
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.kind === addKind)));
+  $('add-help').innerHTML = KIND_HELP[addKind];
+  let f = '';
+  if (addKind === 'google' || addKind === 'ics') {
+    f = `<label for="f-url">iCal 주소</label><input type="url" id="f-url" placeholder="${addKind === 'google' ? 'https://calendar.google.com/calendar/ical/.../private-.../basic.ics' : 'webcal://...'}" autocomplete="off">`;
+  } else if (addKind === 'apple' || addKind === 'naver') {
+    f = `<label for="f-user">${addKind === 'apple' ? 'Apple 계정 이메일' : '네이버 아이디'}</label><input type="text" id="f-user" autocomplete="off" autocapitalize="off">
+         <label for="f-pass">${addKind === 'apple' ? '앱 암호' : '애플리케이션 비밀번호'}</label><input type="password" id="f-pass" autocomplete="off">
+         <label for="f-server">CalDAV 서버</label><input type="url" id="f-server" value="${CALDAV_SERVER[addKind]}">`;
+  } else if (addKind === 'file') {
+    f = `<label for="f-file">.ics 파일</label><input type="file" id="f-file" accept=".ics,text/calendar">`;
+  }
+  $('add-fields').innerHTML = f;
+  const defaults = { google: '구글', apple: '애플', naver: '네이버', ics: '', file: '' };
+  if (!$('add-name').value || Object.values(defaults).includes($('add-name').value)) $('add-name').value = defaults[addKind];
+}
+
+function renderSrcList() {
+  $('src-list').innerHTML = sources.length === 0 ? '<p class="hint">아직 없습니다. 아래에서 추가하세요.</p>' :
+    sources.map(s => `<div class="src">
+      <input type="color" value="${s.color}" data-color="${s.id}" aria-label="${esc(s.name)} 색">
+      <div class="info"><strong>${esc(s.name)}</strong><span>${esc(kindLabel(s))}${errors.has(s.id) ? ' · ⚠︎ ' + esc(errors.get(s.id)) : ''}</span></div>
+      <button type="button" class="btn danger" data-del="${s.id}">삭제</button></div>`).join('');
+}
+const kindLabel = s => s.kind === 'caldav' ? `CalDAV · ${s.username}` : s.kind === 'file' ? '.ics 파일' : s.holiday ? '공휴일' : 'iCal 구독';
+
+function openSettings() {
+  $('proxy-url').value = settings.proxyUrl || '';
+  $('proxy-key').value = settings.proxyKey || '';
+  $('add-color').value = PALETTE[sources.length % PALETTE.length];
+  renderSrcList();
+  renderAddForm();
+  $('settings').showModal();
+}
+
+function addSource(src) {
+  src.id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
+  sources.push(src);
+  saveSources();
+  renderSrcList();
+  $('add-name').value = '';
+  $('add-color').value = PALETTE[sources.length % PALETTE.length];
+  renderAddForm();
+  refreshAll();
+}
+
+$('settings-btn').onclick = openSettings;
+$('settings').addEventListener('close', () => {
+  settings.proxyUrl = $('proxy-url').value.trim();
+  settings.proxyKey = $('proxy-key').value.trim();
+  saveSettings();
+  refreshAll();
+});
+document.querySelector('.tabs').addEventListener('click', e => {
+  const k = e.target.closest('button')?.dataset.kind;
+  if (k) { addKind = k; renderAddForm(); }
+});
+$('src-list').addEventListener('click', e => {
+  const id = e.target.dataset.del;
+  if (!id) return;
+  const s = sources.find(x => x.id === id);
+  if (!confirm(`'${s.name}' 캘린더를 뺄까요? (원래 캘린더의 일정은 지워지지 않습니다)`)) return;
+  sources = sources.filter(x => x.id !== id);
+  try { localStorage.removeItem('moa.cache.' + id); } catch {}
+  raw.delete(id); parsed.delete(id); errors.delete(id);
+  saveSources(); renderSrcList(); render();
+});
+$('src-list').addEventListener('input', e => {
+  const id = e.target.dataset.color;
+  if (!id) return;
+  sources.find(x => x.id === id).color = e.target.value;
+  saveSources(); render();
+});
+$('add-holidays').onclick = () => {
+  if (sources.some(s => s.holiday)) { alert('이미 추가되어 있습니다'); return; }
+  addSource({ kind: 'ics', name: '공휴일', color: '#e5484d', url: HOLIDAY_ICS, holiday: true });
+};
+$('add-btn').onclick = async () => {
+  settings.proxyUrl = $('proxy-url').value.trim();
+  settings.proxyKey = $('proxy-key').value.trim();
+  saveSettings();
+  const name = $('add-name').value.trim() || '캘린더';
+  const color = $('add-color').value;
+  if (addKind === 'google' || addKind === 'ics') {
+    const url = $('f-url').value.trim();
+    if (!/^(https|webcals?):\/\//i.test(url)) { alert('https:// 또는 webcal:// 로 시작하는 주소를 넣어 주세요'); return; }
+    if (addKind === 'google' && !/calendar\.google\.com/.test(url)) {
+      if (!confirm('구글 캘린더 주소처럼 보이지 않습니다. 그래도 추가할까요?')) return;
+    }
+    addSource({ kind: 'ics', name, color, url });
+  } else if (addKind === 'apple' || addKind === 'naver') {
+    const username = $('f-user').value.trim(), password = $('f-pass').value.trim(), server = $('f-server').value.trim();
+    if (!username || !password) { alert('아이디와 비밀번호를 넣어 주세요'); return; }
+    addSource({ kind: 'caldav', name, color, username, password, server });
+  } else if (addKind === 'file') {
+    const file = $('f-file').files[0];
+    if (!file) { alert('파일을 골라 주세요'); return; }
+    const ics = await file.text();
+    if (!ics.includes('BEGIN:VCALENDAR')) { alert('.ics 캘린더 파일이 아닙니다'); return; }
+    addSource({ kind: 'file', name: name || file.name.replace(/\.ics$/i, ''), color, ics });
+  }
+};
+
+// ── 화면 조작 ───────────────────────────────────────────────
+$('prev').onclick = () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1); render(); };
+$('next').onclick = () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1); render(); };
+$('today-btn').onclick = () => { cursor = new Date(); cursor.setDate(1); selected = startOfDay(new Date()); render(); };
+$('refresh').onclick = refreshAll;
+$('grid').addEventListener('click', e => {
+  const cell = e.target.closest('[data-day]');
+  if (!cell) return;
+  const [yy, mm, dd] = cell.dataset.day.split('-').map(Number);
+  selected = new Date(yy, mm - 1, dd);
+  if (mm - 1 !== cursor.getMonth()) cursor = new Date(yy, mm - 1, 1);
+  render();
+  if (matchMedia('(max-width: 520px)').matches) $('day-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+$('legend').addEventListener('click', e => {
+  const id = e.target.closest('[data-toggle]')?.dataset.toggle;
+  if (!id) return;
+  if (e.target.classList.contains('err')) { alert(errors.get(id)); return; }
+  const s = sources.find(x => x.id === id);
+  s.hidden = !s.hidden;
+  saveSources(); render();
+});
+// 좌우로 밀어 달 넘기기
+let touchX = null;
+$('grid').addEventListener('touchstart', e => { touchX = e.touches[0].clientX; }, { passive: true });
+$('grid').addEventListener('touchend', e => {
+  if (touchX === null) return;
+  const dx = e.changedTouches[0].clientX - touchX; touchX = null;
+  if (Math.abs(dx) > 60) (dx < 0 ? $('next') : $('prev')).click();
+});
+document.addEventListener('keydown', e => {
+  if ($('settings').open || e.target.matches('input')) return;
+  if (e.key === 'ArrowLeft') $('prev').click();
+  if (e.key === 'ArrowRight') $('next').click();
+  if (e.key === 't') $('today-btn').click();
+});
+// 화면 폭이 바뀌면(가로/세로 회전) 칸당 표시 개수가 달라진다
+matchMedia('(max-width: 520px)').addEventListener('change', render);
+// 다른 앱에 갔다 오면 30분 넘게 묵은 일정은 다시 받는다
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  const at = store.get('moa.fetchedAt', null);
+  if (!at || Date.now() - new Date(at) > 30 * 60 * 1000) refreshAll();
+});
+
+loadCached();
+render();
+if (sources.length) refreshAll();
+</script>
+</body>
+</html>
