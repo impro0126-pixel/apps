@@ -103,8 +103,15 @@ async function handleCaldav({ server, username, password, start, end }) {
   };
 
   // 1) principal
-  const p1 = await dav(base.toString(), 'PROPFIND',
-    `<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`, 0);
+  const principalQuery = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
+  let p1;
+  try {
+    p1 = await dav(base.toString(), 'PROPFIND', principalQuery, 0);
+  } catch (e) {
+    // 루트에서 답을 안 주는 서버는 표준 길(RFC 6764)로 한 번 더 찾는다. 비밀번호 오류는 그대로 알린다
+    if (/비밀번호/.test(e.message)) throw e;
+    p1 = await dav(new URL('/.well-known/caldav', base).toString(), 'PROPFIND', principalQuery, 0);
+  }
   const principalHref = firstHref(p1.xml, 'current-user-principal');
   const principal = principalHref ? new URL(principalHref, p1.url).toString() : p1.url;
 
